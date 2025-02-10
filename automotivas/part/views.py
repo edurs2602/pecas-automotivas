@@ -1,33 +1,42 @@
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import Part
-from .serializers import PartSerializer
+from .serializers import ListPartSerializer, PartDetailSerializer
 from car.models import Car
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
     """
-    Permite que apenas usuários administradores possam realizar operações de escrita.
-    Usuários autenticados podem realizar operações de leitura (GET, HEAD, OPTIONS).
+    Permite operações de leitura para qualquer usuário autenticado.
+    Operações de escrita (POST, PUT, PATCH, DELETE) são permitidas apenas para administradores.
     """
     def has_permission(self, request, view):
-        # Permite acesso a métodos seguros se o usuário estiver autenticado
         if request.method in permissions.SAFE_METHODS:
             return request.user and request.user.is_authenticated
-        # Para métodos não seguros (POST, PUT, PATCH, DELETE), exige que o usuário seja admin
         return request.user and request.user.is_authenticated and request.user.user_type == 'admin'
 
 class PartViewSet(viewsets.ModelViewSet):
     """
-    ViewSet para gerenciar as Part (peças).
-    
-    - Usuários comuns (user_type: common): podem apenas listar e visualizar detalhes.
-    - Administradores (user_type: admin): podem criar, atualizar e remover peças.
+    ViewSet para gerenciar as peças (Part).
+
+    - Para a listagem (action "list"), utiliza ListPartSerializer (retorna dados resumidos).
+    - Para as demais ações (retrieve, create, update, destroy), utiliza PartDetailSerializer.
+    - Permite filtragem por part_number, name e price.
+    - Contém endpoints customizados para associar e desassociar CarModels.
     """
     queryset = Part.objects.all()
-    serializer_class = PartSerializer
     permission_classes = [IsAdminOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['part_number', 'name', 'price']
+    search_fields = ['part_number', 'name']
+    ordering_fields = ['price', 'name']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ListPartSerializer
+        return PartDetailSerializer
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminOrReadOnly])
     def associate_carmodels(self, request, pk=None):
@@ -40,7 +49,7 @@ class PartViewSet(viewsets.ModelViewSet):
         if not isinstance(car_model_ids, list):
             return Response({"detail": "car_model_ids deve ser uma lista."}, status=status.HTTP_400_BAD_REQUEST)
         
-        car_models = CarModel.objects.filter(id__in=car_model_ids)
+        car_models = Car.objects.filter(id__in=car_model_ids)
         if not car_models.exists():
             return Response({"detail": "Nenhum CarModel encontrado com os IDs fornecidos."}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -60,11 +69,11 @@ class PartViewSet(viewsets.ModelViewSet):
         if not car_model_id:
             return Response({"detail": "car_model_id é obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            car_model = CarModel.objects.get(id=car_model_id)
+            car_model = Car.objects.get(id=car_model_id)
             part.car_models.remove(car_model)
             part.save()
             serializer = self.get_serializer(part)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except CarModel.DoesNotExist:
+        except Car.DoesNotExist:
             return Response({"detail": "CarModel não encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
