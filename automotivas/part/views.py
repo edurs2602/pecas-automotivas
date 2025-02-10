@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Part
 from .serializers import ListPartSerializer, PartDetailSerializer
@@ -17,6 +18,14 @@ class IsAdminOrReadOnly(permissions.BasePermission):
             return request.user and request.user.is_authenticated
         return request.user and request.user.is_authenticated and request.user.user_type == 'admin'
 
+class PartPagination(PageNumberPagination):
+    """
+    Configuração de paginação para o endpoint de Part.
+    """
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class PartViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gerenciar as peças (Part).
@@ -28,6 +37,7 @@ class PartViewSet(viewsets.ModelViewSet):
     """
     queryset = Part.objects.all()
     permission_classes = [IsAdminOrReadOnly]
+    pagination_class = PartPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['part_number', 'name', 'price']
     search_fields = ['part_number', 'name']
