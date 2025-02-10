@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     
     'accounts',
     'part',
+    'car'
 ]
 
 REST_FRAMEWORK = {

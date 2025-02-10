@@ -13,8 +13,7 @@ def generate_part_number():
 
 class Part(models.Model):
     """
-    Modelo para Part, onde o campo part_number é um hash de 10 caracteres que
-    também serve como um identificador secundário.
+    Modelo para Part
     """
     id = models.UUIDField(
         primary_key=True,
