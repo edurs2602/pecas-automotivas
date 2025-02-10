@@ -10,25 +10,25 @@ Este projeto é uma aplicação Django que simula um sistema de gerenciamento de
 
 #### Clone o Repositório
 
-´´´bash
+```bash
 git clone <URL_DO_REPOSITORIO>
 cd <NOME_DO_DIRETORIO>
-´´´
+```
 
 #### Configure as Variáveis de Ambiente
 Crie um arquivo .env na raiz do projeto com as seguintes variáveis (ajuste conforme necessário):
-´´´bash
+```bash
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_NAME=automotivas
 POSTGRES_PORT=5432
-´´´
+```
 
 #### Suba os Containers
 Execute o comando abaixo para construir as imagens e iniciar os containers:
-´´´bash
+```bash
 docker-compose up --build
-´´´
+```
 
 #### Acesse a Aplicação e os Endpoints da API
 
