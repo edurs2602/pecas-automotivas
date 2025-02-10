@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import action
 from .models import Car
 from .serializers import CarSerializer
 
@@ -22,4 +23,15 @@ class CarViewSet(viewsets.ModelViewSet):
     queryset = Car.objects.all()
     serializer_class = CarSerializer
     permission_classes = [IsAdminOrReadOnly]
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def parts(self, request, pk=None):
+        """
+        Retorna as peças associadas a este CarModel.
+        """
+        car_model = self.get_object()
+        parts = car_model.parts.all()  # 'parts' é o related_name definido no campo many-to-many de Part
+        serializer = PartSerializer(parts, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
