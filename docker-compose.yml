@@ -14,10 +14,9 @@ services:
       - POSTGRES_DB=${POSTGRES_NAME}
       - PGPORT=${POSTGRES_PORT}
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
       interval: 10s
       retries: 5
-  
   
   backend:
     build:
@@ -33,5 +32,24 @@ services:
     env_file:
       - .env
 
+  redis:
+    image: redis:6.2-alpine
+    ports:
+      - "6379:6379"
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A automotivas worker -l info
+    depends_on:
+      - backend
+      - redis
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+
 volumes:
   automotivas_db:
+

@@ -2,19 +2,12 @@ import uuid
 import hashlib
 import random
 from django.db import models
+from car.models import Car
 
-def generate_part_number():
-    """
-    Gera um hash de 8 caracteres a partir de um número aleatório.
-    """
-    random_value = random.getrandbits(128)
-    hash_str = hashlib.sha256(str(random_value).encode('utf-8')).hexdigest()
-    return hash_str[:8]
 
 class Part(models.Model):
     """
-    Modelo para Part, onde o campo part_number é um hash de 10 caracteres que
-    também serve como um identificador secundário.
+    Modelo para Part
     """
     id = models.UUIDField(
         primary_key=True,
@@ -23,12 +16,11 @@ class Part(models.Model):
     )
 
     part_number = models.CharField(
-        max_length=8,
+        max_length=20,
         unique=True,
-        default=generate_part_number,
         blank=False,
         null=False,
-        help_text="Hash de 8 caracteres gerado automaticamente como identificador secundário."
+        help_text="Codigo da peça."
     )
 
     name = models.CharField(
@@ -58,6 +50,13 @@ class Part(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True,
         help_text="Data e hora da última atualização."
+    )
+
+    car_models = models.ManyToManyField(
+        Car,
+        blank=True,
+        related_name='parts',
+        help_text="Modelos de carro associados à peça."
     )
     
     def __str__(self):
