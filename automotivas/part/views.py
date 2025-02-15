@@ -2,9 +2,12 @@ from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Part
 from .serializers import ListPartSerializer, PartDetailSerializer
+from .tasks import process_csv_file
 from car.models import Car
 
 
@@ -47,6 +50,27 @@ class PartViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return ListPartSerializer
         return PartDetailSerializer
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdminOrReadOnly])
+    def upload_csv(self, request):
+        """
+        Endpoint para upload de CSV que adiciona novas peças.
+        Espera um arquivo enviado com a key 'file' no multipart/form-data.
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response({"detail": "Nenhum arquivo enviado."}, status=status.HTTP_400_BAD_REQUEST)
+        if not file.name.endswith('.csv'):
+            return Response({"detail": "O arquivo deve ser no formato CSV."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Salva o arquivo temporariamente
+        file_name = default_storage.save(f'uploads/{file.name}', ContentFile(file.read()))
+        file_path = default_storage.path(file_name)
+        
+        # Dispara a tarefa Celery para processar o CSV
+        process_csv_file.delay(file_path)
+        
+        return Response({"detail": "Processamento iniciado. As peças serão adicionadas em breve."}, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminOrReadOnly])
     def associate_carmodels(self, request, pk=None):
