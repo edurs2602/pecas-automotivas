@@ -1,43 +1,26 @@
+import tempfile
 from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Part
 from .serializers import ListPartSerializer, PartDetailSerializer
 from .tasks import process_csv_file
 from car.models import Car
 
-
 class IsAdminOrReadOnly(permissions.BasePermission):
-    """
-    Permite operações de leitura para qualquer usuário autenticado.
-    Operações de escrita (POST, PUT, PATCH, DELETE) são permitidas apenas para administradores.
-    """
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return request.user and request.user.is_authenticated
         return request.user and request.user.is_authenticated and request.user.user_type == 'admin'
 
 class PartPagination(PageNumberPagination):
-    """
-    Configuração de paginação para o endpoint de Part.
-    """
     page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 100
 
 class PartViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gerenciar as peças (Part).
-
-    - Para a listagem (action "list"), utiliza ListPartSerializer (retorna dados resumidos).
-    - Para as demais ações (retrieve, create, update, destroy), utiliza PartDetailSerializer.
-    - Permite filtragem por part_number, name e price.
-    - Contém endpoints customizados para associar e desassociar CarModels.
-    """
     queryset = Part.objects.all()
     permission_classes = [IsAdminOrReadOnly]
     pagination_class = PartPagination
@@ -53,19 +36,17 @@ class PartViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[IsAdminOrReadOnly])
     def upload_csv(self, request):
-        """
-        Endpoint para upload de CSV que adiciona novas peças.
-        Espera um arquivo enviado com a key 'file' no multipart/form-data.
-        """
         file = request.FILES.get('file')
         if not file:
             return Response({"detail": "Nenhum arquivo enviado."}, status=status.HTTP_400_BAD_REQUEST)
         if not file.name.endswith('.csv'):
             return Response({"detail": "O arquivo deve ser no formato CSV."}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Salva o arquivo temporariamente
-        file_name = default_storage.save(f'uploads/{file.name}', ContentFile(file.read()))
-        file_path = default_storage.path(file_name)
+        # Cria um arquivo temporário na pasta /tmp e escreve o conteúdo do CSV
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", dir="/tmp") as temp_file:
+            temp_file.write(file.read())
+            temp_file.flush()
+            file_path = temp_file.name
         
         # Dispara a tarefa Celery para processar o CSV
         process_csv_file.delay(file_path)
@@ -74,10 +55,6 @@ class PartViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminOrReadOnly])
     def associate_carmodels(self, request, pk=None):
-        """
-        Associa uma ou mais peças a modelos de carro.
-        Espera um JSON com 'car_model_ids' (lista de IDs de CarModel).
-        """
         part = self.get_object()
         car_model_ids = request.data.get('car_model_ids', [])
         if not isinstance(car_model_ids, list):
@@ -94,10 +71,6 @@ class PartViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminOrReadOnly])
     def disassociate_carmodel(self, request, pk=None):
-        """
-        Desassocia um modelo de carro de uma peça.
-        Espera um JSON com 'car_model_id'.
-        """
         part = self.get_object()
         car_model_id = request.data.get('car_model_id', None)
         if not car_model_id:
