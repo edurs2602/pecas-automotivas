@@ -1,15 +1,13 @@
+import io
 from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Part
 from .serializers import ListPartSerializer, PartDetailSerializer
 from .tasks import process_csv_file
 from car.models import Car
-
 
 class IsAdminOrReadOnly(permissions.BasePermission):
     """
@@ -56,6 +54,9 @@ class PartViewSet(viewsets.ModelViewSet):
         """
         Endpoint para upload de CSV que adiciona novas peças.
         Espera um arquivo enviado com a key 'file' no multipart/form-data.
+        
+        Nesta implementação, o conteúdo do arquivo CSV é lido e enviado diretamente
+        para a tarefa Celery, evitando a necessidade de salvar o arquivo no disco.
         """
         file = request.FILES.get('file')
         if not file:
@@ -63,12 +64,13 @@ class PartViewSet(viewsets.ModelViewSet):
         if not file.name.endswith('.csv'):
             return Response({"detail": "O arquivo deve ser no formato CSV."}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Salva o arquivo temporariamente
-        file_name = default_storage.save(f'uploads/{file.name}', ContentFile(file.read()))
-        file_path = default_storage.path(file_name)
+        try:
+            csv_content = file.read().decode('utf-8')
+        except Exception as e:
+            return Response({"detail": f"Erro ao ler o arquivo: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Dispara a tarefa Celery para processar o CSV
-        process_csv_file.delay(file_path)
+        # Envia o conteúdo do CSV diretamente para a tarefa Celery
+        process_csv_file.delay(csv_content)
         
         return Response({"detail": "Processamento iniciado. As peças serão adicionadas em breve."}, status=status.HTTP_202_ACCEPTED)
 
